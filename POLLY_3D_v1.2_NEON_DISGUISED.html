@@ -1,0 +1,2332 @@
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polly 3D v1.2 - Neon Edition</title>
+    <!-- Load Tailwind CSS for styling the UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FIX: Use an import map to resolve bare module specifiers like 'three' -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js",
+                "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+    
+    <!-- Load the Cannon.js Physics Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+
+    <style>
+        /* New styling for main layout: Flex container to arrange sidebar and scene */
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            height: 100%;
+            width: 100%;
+            background-color: #282c34;
+            display: flex; /* Make body a flex container */
+        }
+        /* Increased scene size by making the sidebar thinner (w-60 ~ 240px) */
+        #editor-sidebar {
+            flex-shrink: 0; 
+        }
+        #scene-container {
+            flex-grow: 1; 
+            height: 100vh;
+        }
+        canvas { 
+            display: block; 
+        }
+        /* Custom styling for inputs */
+        #colorPicker {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 40px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            border-radius: 0.5rem;
+        }
+        #colorPicker::-webkit-color-swatch-wrapper { padding: 0; }
+        #colorPicker::-webkit-color-swatch { border: none; border-radius: 0.5rem; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5) inset; }
+        #colorPicker::-moz-color-swatch-wrapper { padding: 0; }
+        #colorPicker::-moz-color-swatch { border: none; border-radius: 0.5rem; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5) inset; }
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+            background: #4b5563;
+            height: 8px;
+            border-radius: 4px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            margin-top: -6px;
+            background-color: #6366f1;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 2px #6366f1;
+            transition: background-color 0.15s ease-in-out;
+        }
+        input[type="range"]:focus::-webkit-slider-thumb {
+            box-shadow: 0 0 0 4px #a5b4fc;
+        }
+    </style>
+
+<style id="poppy-holo-ui-style">
+/* Hologram left drawer */
+#poppyHoloToggle {
+  position: fixed;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10050;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.06);
+  color: white;
+  padding: 10px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  cursor: pointer;
+  backdrop-filter: blur(6px) saturate(120%);
+}
+#poppyHoloDrawer {
+  position: fixed;
+  left: -360px; /* hidden by default */
+  top: 0;
+  height: 100vh;
+  width: 360px;
+  z-index: 10040;
+  background: linear-gradient(180deg, rgba(6,6,10,0.95), rgba(10,8,12,0.94));
+  border-right: 1px solid rgba(255,255,255,0.04);
+  box-shadow: 24px 0 80px rgba(20,10,40,0.6);
+  transition: left 420ms cubic-bezier(.2,.9,.25,1), box-shadow 420ms;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  backdrop-filter: blur(10px) saturate(140%);
+}
+
+/* When open */
+#poppyHoloDrawer.open { left: 0; box-shadow: 0 0 120px rgba(80,40,160,0.35); }
+
+/* Header */
+#poppyHoloHeader { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+#poppyHoloHeader h2 { margin:0; font-size:18px; font-weight:700; color:#e6e9ff; letter-spacing:0.4px; }
+#poppyHoloHeader small { color: #b6b9d6; font-size:12px; opacity:0.9; }
+
+/* Tabs */
+.poppyTabs { display:flex; gap:8px; margin-top:8px; }
+.poppyTab {
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:13px;
+  color:#dfe6ff;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor:pointer;
+  transition: all 220ms ease;
+}
+.poppyTab.active {
+  background: linear-gradient(90deg, rgba(99,102,241,0.12), rgba(124,58,237,0.08));
+  border: 1px solid rgba(124,58,237,0.22);
+  box-shadow: 0 6px 24px rgba(99,102,241,0.06);
+  color: white;
+  transform: translateY(-2px);
+}
+
+/* Tab content area */
+#poppyTabContent { margin-top:12px; overflow:auto; flex:1; padding-right:6px; }
+.poppySection { display:none; color:#d7e0ff; font-size:13px; }
+.poppySection.active { display:block; }
+
+/* Controls */
+.poppyControl { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 6px; border-radius:10px; }
+.poppyControl label { color:#cbd5ff; font-size:13px; }
+.poppyControl input[type="range"] { width:160px; accent-color: #9b8cff; }
+.poppyButton {
+  background: linear-gradient(90deg, rgba(99,102,241,0.18), rgba(124,58,237,0.12));
+  color:white;
+  padding:8px 10px;
+  border-radius:10px;
+  border: 1px solid rgba(255,255,255,0.04);
+  cursor:pointer;
+  font-weight:600;
+  font-size:13px;
+  transition: transform 180ms ease, box-shadow 180ms;
+}
+.poppyButton:hover { transform: translateY(-3px); box-shadow: 0 8px 30px rgba(99,102,241,0.06); }
+
+/* Accent glows */
+.poppyAccent {
+  height:2px;
+  background: linear-gradient(90deg,#6ee7ff, #b794f4, #7c3aed);
+  border-radius:2px;
+  margin-top:6px;
+  opacity:0.95;
+  filter: blur(0.6px);
+}
+
+/* Mini info */
+.poppyNote { font-size:12px; color:#9aa4d6; opacity:0.9; margin-top:8px; }
+
+/* Small responsive tweaks */
+@media (max-width:600px){
+  #poppyHoloDrawer { width: 92%; left: -92%; }
+  #poppyHoloDrawer.open { left: 0; }
+  #poppyHoloToggle { top: auto; bottom: 12px; left: 12px; transform:none; }
+}
+</style>
+
+<style id="poppy-neon-global">
+:root {
+  --poppy-neon-accent: linear-gradient(90deg,#7c3aed,#06b6d4);
+  --poppy-bg-deep: #040005;
+  --poppy-panel-bg: rgba(4,2,8,0.85);
+}
+body { background: var(--poppy-bg-deep) !important; }
+#poppyHoloDrawer { background: linear-gradient(180deg,#06020a, #0a0710) !important; }
+.poppyButton { box-shadow: 0 8px 30px rgba(124,58,237,0.06); }
+</style>
+
+</head>
+<body>
+<!-- POPPY HOLOGRAM DRAWER TOGGLE & PANEL (added UI only) -->
+<button id="poppyHoloToggle" aria-label="Open Settings">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="vertical-align:middle">
+    <path d="M12 2v20M2 12h20" stroke="white" stroke-opacity="0.95" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+</button>
+
+<aside id="poppyHoloDrawer" aria-hidden="true" role="complementary">
+  <div id="poppyHoloHeader">
+    <div style="display:flex;flex-direction:column">
+      <h2>Polly 3D v1.2</h2>
+      <small>Control & Visuals</small>
+    </div>
+    <div style="flex:1"></div>
+    <button id="poppyClose" class="poppyButton" style="padding:6px 8px;background:transparent;border:1px solid rgba(255,255,255,0.04);color:#cbd5ff">Close</button>
+  </div>
+
+  <div class="poppyTabs" role="tablist" aria-label="Drawer Tabs">
+    <button class="poppyTab active" data-tab="general">General</button>
+    <button class="poppyTab" data-tab="audio">Audio</button>
+    <button class="poppyTab" data-tab="visual">Visual</button>
+    <button class="poppyTab" data-tab="advanced">Advanced</button>
+  
+    <button class="poppyTab" data-tab="3d">3D</button></div>
+  <div class="poppyAccent" aria-hidden="true"></div>
+
+  <div id="poppyTabContent">
+    <div id="tab-general" class="poppySection active" role="tabpanel">
+      <div class="poppyControl"><label>Spawn Preview</label><button class="poppyButton" id="ui_spawnPreview">Toggle</button></div>
+      <div class="poppyControl"><label>Grid Snap</label><button class="poppyButton" id="ui_gridSnap">Off</button></div>
+      <div class="poppyNote">Quick toggles for common tools. These do not change physics by themselves.</div>
+    </div>
+
+    <div id="tab-audio" class="poppySection" role="tabpanel">
+      <div class="poppyControl"><label>SFX Volume</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="poppySfxRange" type="range" min="0" max="100" value="80" />
+          <div id="poppySfxVal" style="width:34px;text-align:right;color:#cbd5ff">80</div>
+        </div>
+      </div>
+      <div class="poppyControl"><label>Master Mute</label><button class="poppyButton" id="poppyMasterMute">Unmuted</button></div>
+      <div class="poppyNote">Volume controls will update live. If your app has a window.SFX object it will sync automatically.</div>
+    </div>
+
+    <div id="tab-visual" class="poppySection" role="tabpanel">
+      <div class="poppyControl"><label>HUD Opacity</label>
+        <input id="poppyHudOpacity" type="range" min="0" max="100" value="92" />
+      </div>
+      <div class="poppyControl"><label>Accent Intensity</label>
+        <input id="poppyAccentIntensity" type="range" min="0" max="100" value="80" />
+      </div>
+      <div class="poppyNote">Visual tweaks only — no gameplay changes.</div>
+    </div>
+
+    <div id="tab-advanced" class="poppySection" role="tabpanel">
+      <div class="poppyControl"><label>Reset UI</label><button class="poppyButton" id="poppyResetUi">Reset</button></div>
+      <div class="poppyControl"><label>Toggle Animations</label><button class="poppyButton" id="poppyToggleAnim">On</button></div>
+      <div class="poppyNote">Advanced UI options. Reset will only return UI preferences to defaults.</div>
+    </div>
+  
+    <div id="tab-3d" class="poppySection" role="tabpanel" aria-hidden="true">
+
+<!-- START MOVED 3D PHYSICS - NEON THEME -->
+<div id="poppy-neon-3d-wrapper" style="background:linear-gradient(180deg,#000 0%, #05010a 100%); color:#e6e9ff; padding:10px; border-radius:12px; box-shadow: 0 10px 40px rgba(0,0,0,0.7);">
+<style>
+  /* Neon theme adjustments */
+  #poppy-neon-3d-wrapper h1,h2,h3 { color: #dbeafe; text-shadow: 0 0 10px rgba(124,58,237,0.08); }
+  #poppy-neon-3d-wrapper .tab-button { background:transparent; border:1px solid rgba(255,255,255,0.03); color:#cbd5ff; }
+  #poppy-neon-3d-wrapper .tab-button.active { background: linear-gradient(90deg,#7c3aed,#06b6d4); color:#000; box-shadow:0 8px 30px rgba(124,58,237,0.12); }
+  #poppy-neon-3d-wrapper .tab-content { background: rgba(10,8,12,0.45); border-radius:8px; padding:8px; }
+  #poppy-neon-3d-wrapper .poppy-neon-btn { background: linear-gradient(90deg,#8b5cf6,#06b6d4); color:#021; border:none; padding:8px 10px; border-radius:8px; font-weight:700; box-shadow:0 6px 18px rgba(99,102,241,0.14); }
+  #poppy-neon-3d-wrapper input[type="range"]::-webkit-slider-thumb { box-shadow: 0 0 8px rgba(99,102,241,0.18); border:2px solid rgba(255,255,255,0.12); }
+  #poppy-neon-3d-wrapper .section-title { color:#dbeafe; font-weight:700; margin-bottom:6px; }
+</style>
+<div id="editor-sidebar" class="w-60 h-full bg-gray-900 p-4 shadow-2xl z-20 text-white flex flex-col border-r border-gray-700 overflow-y-auto">
+        <h1 class="text-2xl font-extrabold mb-4 text-indigo-400">3D Physics</h1>
+        
+        <!-- Tab Navigation -->
+        <div class="flex mb-4 p-1 bg-gray-800 rounded-lg">
+            <button id="tab-primitives" class="tab-button flex-1 text-xs font-medium py-2 rounded-lg transition duration-150">
+                Shapes
+            </button>
+            <button id="tab-speed" class="tab-button flex-1 text-xs font-medium py-2 rounded-lg transition duration-150">
+                Global
+            </button>
+            <button id="tab-editor" class="tab-button flex-1 text-xs font-medium py-2 rounded-lg transition duration-150">
+                Object
+            </button>
+        </div>
+        
+        <!-- Instructions (Moved below tabs) -->
+        <div class="mb-4 p-2 bg-gray-800 rounded-lg text-xs text-gray-300">
+            <h2 class="font-bold text-gray-200 mb-1">Controls:</h2>
+            <ul class="list-disc list-inside space-y-0.5">
+                <li><strong>Select Object:</strong> Single Click</li>
+                <li><strong>Throw Object:</strong> Drag + Release (Kinematic Drag)</li>
+                <li><strong>Delete Object:</strong> Double Click</li>
+            </ul>
+        </div>
+
+        <!-- Tab Content Containers -->
+        <div id="tab-content-wrapper" class="flex flex-col flex-grow">
+        
+            <!-- 1. Primitives Tab Content -->
+            <div id="content-primitives" class="tab-content space-y-4">
+                <h2 class="text-xl font-semibold mb-3 text-gray-200 border-b border-gray-700 pb-2">Add Shapes</h2>
+                <div class="grid grid-cols-3 gap-2">
+                    <!-- Reduced number of shapes for a cleaner UI/simpler code -->
+                    <button id="addBox" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-1 rounded-lg transition duration-150 transform hover:scale-105 shadow-lg text-xs">
+                        Box
+                    </button>
+                    <button id="addSphere" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-1 rounded-lg transition duration-150 transform hover:scale-105 shadow-lg text-xs">
+                        Sphere
+                    </button>
+                    <button id="addCylinder" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-1 rounded-lg transition duration-150 transform hover:scale-105 shadow-lg text-xs">
+                        Cylinder
+                    </button>
+                    <button id="addCone" class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-1 rounded-lg transition duration-150 transform hover:scale-105 shadow-lg text-xs">
+                        Cone
+                    </button>
+                    <button id="addCapsule" class="bg-purple-600 hover:bg-purple-700 text-white font-medium text-xs py-2 rounded-lg transition duration-150 transform hover:scale-105 shadow-lg">
+                        Capsule
+                    </button>
+                    <!-- NEW SHAPES -->
+                    <button id="addTorus" class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs py-2 rounded-lg transition duration-150 transform hover:scale-105 shadow-lg">
+                        Torus
+                    </button>
+                    <button id="addOctahedron" class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs py-2 rounded-lg transition duration-150 transform hover:scale-105 shadow-lg">
+                        Octahedron
+                    </button>
+                    <!-- NEW ROW SEPARATOR -->
+                    <div class="col-span-3"></div> 
+                    <!-- DETONATION CUBE -->
+                    <button id="addDetonationCube" class="col-span-3 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-1 rounded-lg transition duration-150 transform hover:scale-105 shadow-lg text-xs">
+                        Detonation Cube
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 2. Speed / Global Physics Tab Content -->
+            <div id="content-speed" class="tab-content hidden space-y-4">
+                 <h2 class="text-xl font-semibold mb-3 text-gray-200 border-b border-gray-700 pb-2">Global Simulation Control</h2>
+
+                <!-- Physics Toggle -->
+                <button id="togglePhysics" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg transition duration-150 transform hover:scale-[1.02] shadow-lg">
+                    Pause Physics
+                </button>
+
+                <!-- Gravity Control -->
+                <div>
+                    <label for="gravityControl" class="block text-sm font-medium mb-1 text-gray-400">
+                        Global Gravity (Y-Axis Force)
+                        <span id="gravityValue" class="float-right text-indigo-400">-9.82</span>
+                    </label>
+                    <input type="range" id="gravityControl" min="-50" max="0" step="0.01" value="-9.82"
+                            class="w-full h-2 bg-gray-700 rounded-lg appearance-none">
+                </div>
+                
+                <!-- Slow Motion Control -->
+                <div>
+                    <label for="timeScaleControl" class="block text-sm font-medium mb-1 text-gray-400">
+                        Simulation Speed (Time Scale)
+                        <span id="timeScaleValue" class="float-right text-indigo-400">1.00x</span>
+                    </label>
+                    <input type="range" id="timeScaleControl" min="0.1" max="2.0" step="0.01" value="1.0"
+                            class="w-full h-2 bg-gray-700 rounded-lg appearance-none">
+                </div>
+
+                <!-- Clear Scene Button -->
+                <button id="clearScene" class="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 rounded-lg transition duration-150 transform hover:scale-105 shadow-lg">
+                    Clear All Objects
+                </button>
+            </div>
+
+
+            <!-- 3. Editor Tab Content -->
+            <div id="content-editor" class="tab-content hidden space-y-4">
+                <h2 class="text-xl font-semibold mb-3 text-gray-200 border-b border-gray-700 pb-2">Object Editor</h2>
+                
+                <!-- Color Picker (Hidden for Detonation Cube) -->
+                <div>
+                    <label for="colorPicker" class="block text-sm font-medium mb-1 text-gray-400">Object Color</label>
+                    <input type="color" id="colorPicker" value="#ffffff" disabled>
+                </div>
+                
+                <!-- Explosion Controls (NEW) -->
+                <div id="explosion-control-group" class="hidden space-y-2 bg-gray-800 p-3 rounded-lg border border-red-700">
+                    <h3 class="text-lg font-bold text-red-400">Detonation Control</h3>
+                    <div>
+                        <label for="explosionRateControl" class="block text-sm font-medium mb-1 text-gray-300">
+                            Auto-Detonate Rate
+                            <span id="explosionRateValue" class="float-right text-red-400">Off</span>
+                        </label>
+                        <input type="range" id="explosionRateControl" min="0" max="10" step="0.5" value="0" disabled
+                                class="w-full h-2 bg-gray-700 rounded-lg appearance-none">
+                        <div class="flex justify-between text-xs text-gray-500 mt-1">
+                            <span>Off</span>
+                            <span>10.0s</span>
+                        </div>
+                    </div>
+                    <button id="detonateNow" disabled class="w-full bg-red-800 hover:bg-red-900 text-white font-medium py-2 rounded-lg transition duration-150 shadow-lg disabled:opacity-50">
+                        DETONATE NOW
+                    </button>
+                </div>
+
+
+                <!-- Object Physics Properties -->
+                <h3 class="text-lg font-semibold mb-2 text-gray-200 border-b border-gray-700 pt-2 pb-2">Physics Properties</h3>
+
+                <!-- Hardness / Rigidity Control (Formerly Mass) -->
+                <div class="py-2 px-3 bg-gray-800 rounded-lg">
+                    <label for="massControl" class="block text-sm font-medium mb-1 text-gray-300">
+                        Hardness / Rigidity
+                        <span id="massValue" class="float-right text-indigo-400">Medium</span>
+                    </label>
+                    <input type="range" id="massControl" min="0" max="100" step="1" value="50" disabled
+                            class="w-full h-2 bg-gray-700 rounded-lg appearance-none">
+                    <div class="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>Very Soft</span>
+                        <span>Very Hard</span>
+                    </div>
+                </div>
+
+                <!-- Restitution Control (Bounciness) -->
+                <div>
+                    <label for="restitutionControl" class="block text-sm font-medium mb-1 text-gray-400">
+                        Bounciness (Restitution)
+                        <span id="restitutionValue" class="float-right text-indigo-400">0.5</span>
+                    </label>
+                    <input type="range" id="restitutionControl" min="0" max="1" step="0.1" value="0.5" disabled
+                            class="w-full h-2 bg-gray-700 rounded-lg appearance-none">
+                </div>
+
+                <!-- Friction Control (Sliding) -->
+                <div>
+                    <label for="frictionControl" class="block text-sm font-medium mb-1 text-gray-400">
+                        Sliding (Friction)
+                        <span id="frictionValue" class="float-right text-indigo-400">0.5</span>
+                    </label>
+                    <input type="range" id="frictionControl" min="0" max="1" step="0.1" value="0.5" disabled
+                            class="w-full h-2 bg-gray-700 rounded-lg appearance-none">
+                </div>
+                
+                <!-- Damping Controls -->
+                <div>
+                    <label for="linearDampingControl" class="block text-sm font-medium mb-1 text-gray-400">
+                        Linear Damping (Air Resistance/Drag)
+                        <span id="linearDampingValue" class="float-right text-indigo-400">0.05</span>
+                    </label>
+                    <input type="range" id="linearDampingControl" min="0" max="0.99" step="0.01" value="0.05" disabled
+                            class="w-full h-2 bg-gray-700 rounded-lg appearance-none">
+                </div>
+                
+                <div>
+                    <label for="angularDampingControl" class="block text-sm font-medium mb-1 text-gray-400">
+                        Angular Damping (Spin Decay)
+                        <span id="angularDampingValue" class="float-right text-indigo-400">0.05</span>
+                    </label>
+                    <input type="range" id="angularDampingControl" min="0" max="0.99" step="0.01" value="0.05" disabled
+                            class="w-full h-2 bg-gray-700 rounded-lg appearance-none">
+                </div>
+                
+                <!-- Kinematic Tools Section -->
+                <h3 class="text-lg font-semibold mb-2 text-gray-200 border-b border-gray-700 pt-4 pb-2">Kinematic Tools</h3>
+                <div class="grid grid-cols-3 gap-2">
+                    
+                    <!-- Row 1: Position/State -->
+                    <button id="resetObject" disabled class="kinematic-tool bg-pink-600 hover:bg-pink-700 text-white font-medium text-xs py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        Reset Pos
+                    </button>
+                    <button id="cloneObject" disabled class="kinematic-tool bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        Clone
+                    </button>
+                    <button id="teleportObject" disabled class="kinematic-tool bg-purple-600 hover:bg-purple-700 text-white font-medium text-xs py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        Teleport
+                    </button>
+                    
+                    <button id="freezeObject" disabled class="kinematic-tool bg-teal-600 hover:bg-teal-700 text-white font-medium text-xs py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        Freeze
+                    </button>
+                    <button id="zeroGravity" disabled class="kinematic-tool bg-gray-600 hover:bg-gray-700 text-white font-medium text-xs py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        Gravity OFF
+                    </button>
+                    <button id="clearVelocity" disabled class="kinematic-tool bg-cyan-600 hover:bg-cyan-700 text-white font-medium text-xs py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        Zero Vel
+                    </button>
+
+                    <!-- Row 2: Impulses -->
+                    <button id="kickObjectUp" disabled class="kinematic-tool bg-orange-600 hover:bg-orange-700 text-white font-medium text-xs py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        Impulse UP
+                    </button>
+                    <button id="kickObjectForward" disabled class="kinematic-tool bg-orange-600 hover:bg-orange-700 text-white font-medium text-xs py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        Impulse FWD
+                    </button>
+                    <button id="kickObjectLeft" disabled class="kinematic-tool bg-orange-600 hover:bg-orange-700 text-white font-medium text-xs py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        Impulse LEFT
+                    </button>
+                    
+                    <!-- Row 3: Visual/Rotation -->
+                    <button id="spinObject" disabled class="kinematic-tool bg-yellow-600 hover:bg-yellow-700 text-white font-medium text-xs py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        Random Spin
+                    </button>
+                    <button id="toggleWireframe" disabled class="kinematic-tool bg-gray-600 hover:bg-gray-700 text-white font-medium text-xs py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        Wireframe
+                    </button>
+                    <div class="h-8"></div><!-- Placeholder for alignment -->
+                </div>
+            </div>
+
+        </div>
+        
+        <footer class="mt-auto pt-4 border-t border-gray-700 text-xs text-gray-500 text-center">
+            Built with Three.js & Cannon.js
+        
+<!-- Character Controls Added -->
+<div id="poppy-character-panel" style="margin-top:10px;padding:8px;border-radius:8px;background:linear-gradient(180deg, rgba(124,58,237,0.04), rgba(6,182,212,0.02));">
+  <div class="section-title">Character</div>
+  <div style="display:flex;gap:8px;flex-direction:column">
+    <label style="font-size:13px;color:#dbeafe"><input type="checkbox" id="charEnable"> Enable Character</label>
+    <label style="font-size:13px;color:#dbeafe">Walk Speed: <span id="charSpeedVal">5.0</span></label>
+    <input type="range" id="charSpeed" min="1" max="20" step="0.1" value="5">
+    <label style="font-size:13px;color:#dbeafe">Jump Force: <span id="charJumpVal">8.0</span></label>
+    <input type="range" id="charJump" min="1" max="30" step="0.1" value="8">
+    <label style="font-size:13px;color:#dbeafe"><input type="checkbox" id="charCameraFollow" checked> Camera Follow</label>
+    <button id="charSpawnBtn" class="poppy-neon-btn">Spawn Character</button>
+  </div>
+</div>
+
+</footer>
+    </div></div>
+<!-- END MOVED 3D PHYSICS -->
+
+    </div>
+</div>
+
+  <div style="height:8px"></div>
+  <div style="font-size:12px;color:#98a3d8;opacity:0.9">Version UI · Polished</div>
+</aside>
+
+    
+    <!-- UI Panel: Thinner Sidebar on the left (w-60 ~ 240px) -->
+    
+    
+    <div id="scene-container">
+        <!-- 3D Canvas will be rendered here -->
+    </div>
+
+    <!-- Custom Modal for Messages (Replaces Alert/Confirm) -->
+    <div id="custom-modal" class="hidden opacity-0 absolute top-0 left-0 right-0 p-4 flex items-start justify-center z-50 transition-opacity duration-300 pointer-events-none">
+        <div class="bg-white p-4 rounded-xl shadow-2xl max-w-sm w-full text-center">
+            <h3 id="modal-title" class="text-lg font-bold mb-1 text-indigo-700"></h3>
+            <p id="modal-message" class="text-gray-600 text-sm"></p>
+        </div>
+    </div>
+
+    <!-- 
+        FIX: Moved the script block from the <head> to the end of the <body> 
+        to ensure all HTML elements are loaded before the JavaScript attempts 
+        to attach event listeners to them, resolving the "Cannot read properties of null" TypeError.
+    -->
+    <script type="module">
+        // Import the core library and controls using the bare specifiers resolved by the import map.
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+        import { DragControls } from 'three/examples/jsm/controls/DragControls.js';
+
+        // --- Global Variables (scoped to the module) ---
+        let scene, camera, renderer, controls, dragControls;
+        let world; // Cannon.js physics world
+        const timeStep = 1 / 60; // Standard physics time step (16.67ms)
+        let timeScale = 1.0; // Global time scale for slow motion
+        let selectedObject = null; // Track the currently selected object
+        let selectionBox = null; // Visual helper for selection
+        const objects = []; // Array to hold all draggable THREE.Meshes
+        const physicalObjects = []; // Array to hold objects with their physics bodies
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const clock = new THREE.Clock(); // For delta time calculations
+        const colorPalette = [0xff0040, 0x0040ff, 0x40ff00, 0xffaa00, 0x00ffff, 0xff00ff];
+        let colorIndex = 0;
+        let isDragging = false; // Flag to prevent selection/deletion during camera movement/drag
+        let isPhysicsRunning = true; // Global state for physics toggle
+        let currentTab = 'primitives'; // Default tab
+        
+        // Dragging State for velocity calculation
+        let previousPosition = new THREE.Vector3();
+        let dragStartTime = 0;
+
+
+        // --- Initialization ---
+
+        function init() {
+            // 1. Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x282c34); // Dark background
+            scene.fog = new THREE.Fog(0x282c34, 1, 1000);
+
+            // 2. Camera Setup
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 10, 20);
+
+            // 3. Renderer Setup
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.getElementById('scene-container').appendChild(renderer.domElement);
+
+            // 4. Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            directionalLight.position.set(10, 10, 10);
+            scene.add(directionalLight);
+
+            // 5. Grid/Ground Plane
+            const gridHelper = new THREE.GridHelper(50, 50, 0x555555, 0x555555);
+            scene.add(gridHelper);
+
+            // 6. Physics World Setup (Cannon.js)
+            if (typeof CANNON !== 'undefined') {
+                world = new CANNON.World();
+                world.gravity.set(0, -9.82, 0); 
+                world.solver.iterations = 10;
+
+                // Add a static ground plane
+                const groundShape = new CANNON.Plane();
+                const groundBody = new CANNON.Body({ mass: 0, shape: groundShape });
+                groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2); 
+                world.addBody(groundBody);
+            } else {
+                console.error("CANNON library not found. Physics simulation disabled.");
+            }
+
+
+            // 7. Orbit Controls (Camera Movement)
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; 
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 5;
+            controls.maxDistance = 100;
+
+            // 8. Drag Controls (Object Interaction)
+            initDragControls();
+
+            // 9. Event Listeners and UI Setup
+            window.addEventListener('resize', onWindowResize, false);
+            renderer.domElement.addEventListener('click', onClick, false); 
+            renderer.domElement.addEventListener('dblclick', onDoubleClick, false);
+
+            // --- UI Listeners (Guaranteed to be present in HTML) ---
+            document.getElementById('tab-primitives').addEventListener('click', () => switchTab('primitives'));
+            document.getElementById('tab-speed').addEventListener('click', () => switchTab('speed'));
+            document.getElementById('tab-editor').addEventListener('click', () => switchTab('editor'));
+
+            // Primitives 
+            document.getElementById('addBox').addEventListener('click', () => addShape('Box'));
+            document.getElementById('addSphere').addEventListener('click', () => addShape('Sphere'));
+            document.getElementById('addCylinder').addEventListener('click', () => addShape('Cylinder'));
+            document.getElementById('addDetonationCube').addEventListener('click', () => addShape('DetonationCube')); 
+            document.getElementById('addCone').addEventListener('click', () => addShape('Cone'));
+            document.getElementById('addCapsule').addEventListener('click', () => addShape('Capsule'));
+            // NEW SHAPE LISTENERS
+            document.getElementById('addTorus').addEventListener('click', () => addShape('Torus'));
+            document.getElementById('addOctahedron').addEventListener('click', () => addShape('Octahedron'));
+            
+            // Speed / Global Physics
+            document.getElementById('togglePhysics').addEventListener('click', togglePhysics);
+            document.getElementById('gravityControl').addEventListener('input', handleGravityChange);
+            document.getElementById('timeScaleControl').addEventListener('input', handleTimeScaleChange); 
+            document.getElementById('clearScene').addEventListener('click', clearScene);
+
+            // Object Editor Controls (5 Physics Properties)
+            document.getElementById('colorPicker').addEventListener('input', handleColorChange);
+            document.getElementById('massControl').addEventListener('input', handleMassChange); // Now Hardness/Rigidity
+            document.getElementById('restitutionControl').addEventListener('input', (e) => handlePhysicsControlChange('restitution', e));
+            document.getElementById('frictionControl').addEventListener('input', (e) => handlePhysicsControlChange('friction', e));
+            document.getElementById('linearDampingControl').addEventListener('input', (e) => handlePhysicsControlChange('linearDamping', e));
+            document.getElementById('angularDampingControl').addEventListener('input', (e) => handlePhysicsControlChange('angularDamping', e));
+            document.getElementById('explosionRateControl').addEventListener('input', handleExplosionRateChange); 
+            
+            // Kinematic Tools
+            document.getElementById('resetObject').addEventListener('click', resetSelectedObject);
+            document.getElementById('cloneObject').addEventListener('click', cloneSelectedObject);
+            document.getElementById('teleportObject').addEventListener('click', teleportObject);
+            document.getElementById('freezeObject').addEventListener('click', freezeObject);
+            document.getElementById('zeroGravity').addEventListener('click', toggleObjectGravity);
+            document.getElementById('clearVelocity').addEventListener('click', clearObjectVelocity);
+            document.getElementById('spinObject').addEventListener('click', spinSelectedObject);
+            
+            // Directional Impulses
+            document.getElementById('kickObjectUp').addEventListener('click', () => applyImpulseToSelected(new CANNON.Vec3(0, 30, 0), 'Impulse Up'));
+            document.getElementById('kickObjectForward').addEventListener('click', () => applyImpulseToSelected(new CANNON.Vec3(0, 0, -30), 'Impulse Forward'));
+            document.getElementById('kickObjectLeft').addEventListener('click', () => applyImpulseToSelected(new CANNON.Vec3(-30, 0, 0), 'Impulse Left'));
+            
+            // Extra: Visual Tool
+            document.getElementById('toggleWireframe').addEventListener('click', toggleWireframe);
+            
+            // Detonate button
+            document.getElementById('detonateNow').addEventListener('click', detonateSelectedCube);
+
+
+            // Initial setup
+            switchTab('primitives'); // Show default tab
+            onWindowResize(); 
+            addShape('Box');
+            animate();
+        }
+
+        // --- Tab Management ---
+
+        /**
+         * Switches the active sidebar tab.
+         * @param {string} tabId - ID of the tab content to show (primitives, speed, editor)
+         */
+        function switchTab(tabId) {
+            currentTab = tabId;
+            const tabContents = document.querySelectorAll('.tab-content');
+            const tabButtons = document.querySelectorAll('.tab-button');
+
+            // Hide all content and reset button styles
+            tabContents.forEach(content => content.classList.add('hidden'));
+            tabButtons.forEach(button => {
+                button.classList.remove('bg-indigo-700', 'text-white');
+                button.classList.add('bg-gray-700', 'text-gray-300', 'hover:bg-gray-600');
+            });
+
+            // Show active content and highlight button
+            document.getElementById(`content-${tabId}`).classList.remove('hidden');
+            const activeButton = document.getElementById(`tab-${tabId}`);
+            activeButton.classList.remove('bg-gray-700', 'text-gray-300', 'hover:bg-gray-600');
+            activeButton.classList.add('bg-indigo-700', 'text-white');
+            
+            // If switching to editor, ensure the panel reflects current selection state
+            if (tabId === 'editor') {
+                selectObject(selectedObject);
+            }
+        }
+
+
+        // --- Editor Core Functions ---
+
+        /**
+         * Selects or deselects an object and updates the visual highlight (BoxHelper).
+         * Also updates the control panel to show the selected object's properties.
+         * @param {THREE.Mesh | null} object 
+         */
+        function selectObject(object) {
+            // 1. Deselect previous object
+            if (selectedObject) {
+                scene.remove(selectionBox);
+            }
+
+            // 2. Select new object
+            selectedObject = object;
+            
+            // Get references to explosion controls
+            const explosionControlGroup = document.getElementById('explosion-control-group');
+            const detonateButton = document.getElementById('detonateNow');
+
+            // 3. Add visual feedback and update UI
+            if (selectedObject) {
+                const body = selectedObject.userData.body;
+
+                // Visual Highlight
+                selectionBox = new THREE.BoxHelper(selectedObject, 0xffd700); // Gold color highlight
+                selectionBox.update(); 
+                scene.add(selectionBox);
+                
+                // Color Picker
+                const colorHex = '#' + selectedObject.material.color.getHexString();
+                document.getElementById('colorPicker').value = colorHex;
+                
+                // Physics Controls
+                if (body) {
+                    // Update all physics sliders (Hardness, Restitution, Friction, Damping)
+                    
+                    // Hardness/Rigidity (formerly mass)
+                    document.getElementById('massControl').value = selectedObject.userData.userHardness || 50;
+                    document.getElementById('massValue').textContent = mapHardnessToWeightLabel(selectedObject.userData.userHardness || 50);
+                    document.getElementById('massControl').disabled = false;
+
+                    document.getElementById('restitutionControl').value = body.material.restitution;
+                    document.getElementById('restitutionValue').textContent = body.material.restitution.toFixed(1);
+                    document.getElementById('restitutionControl').disabled = false;
+
+                    document.getElementById('frictionControl').value = body.material.friction;
+                    document.getElementById('frictionValue').textContent = body.material.friction.toFixed(1);
+                    document.getElementById('frictionControl').disabled = false;
+                    
+                    document.getElementById('linearDampingControl').value = body.linearDamping;
+                    document.getElementById('linearDampingValue').textContent = body.linearDamping.toFixed(2);
+                    document.getElementById('linearDampingControl').disabled = false;
+
+                    document.getElementById('angularDampingControl').value = body.angularDamping;
+                    document.getElementById('angularDampingValue').textContent = body.angularDamping.toFixed(2);
+                    document.getElementById('angularDampingControl').disabled = false;
+                    
+                    // Kinematic Tools
+                    document.querySelectorAll('.kinematic-tool').forEach(button => button.disabled = false);
+
+                    // Update gravity toggle state
+                    document.getElementById('zeroGravity').classList.toggle('bg-gray-600', selectedObject.userData.zeroGravity);
+                    document.getElementById('zeroGravity').classList.toggle('bg-blue-600', !selectedObject.userData.zeroGravity);
+                    document.getElementById('zeroGravity').textContent = selectedObject.userData.zeroGravity ? 'Gravity ON' : 'Gravity OFF';
+                    
+                    // Update Freeze state
+                    document.getElementById('freezeObject').classList.toggle('bg-teal-600', !selectedObject.userData.isFrozen);
+                    document.getElementById('freezeObject').classList.toggle('bg-red-600', selectedObject.userData.isFrozen);
+                    document.getElementById('freezeObject').textContent = selectedObject.userData.isFrozen ? 'Unfreeze' : 'Freeze';
+                    
+                    // Update Wireframe state
+                    document.getElementById('toggleWireframe').classList.toggle('bg-gray-600', !selectedObject.material.wireframe);
+                    document.getElementById('toggleWireframe').classList.toggle('bg-yellow-600', selectedObject.material.wireframe);
+                    document.getElementById('toggleWireframe').textContent = selectedObject.material.wireframe ? 'Solid Mesh' : 'Wireframe';
+
+                }
+                
+                // DETONATION CUBE SPECIFIC CONTROLS
+                if (selectedObject.userData.type === 'DetonationCube') {
+                    explosionControlGroup.classList.remove('hidden');
+                    const rate = selectedObject.userData.explosionRate || 0;
+                    document.getElementById('explosionRateControl').value = rate;
+                    document.getElementById('explosionRateValue').textContent = rate === 0 ? 'Off' : `${rate}s`;
+                    document.getElementById('explosionRateControl').disabled = false;
+                    detonateButton.disabled = false;
+                    document.getElementById('colorPicker').disabled = true; // Lock color
+                } else {
+                    explosionControlGroup.classList.add('hidden');
+                    detonateButton.disabled = true;
+                    document.getElementById('explosionRateControl').disabled = true;
+                    document.getElementById('colorPicker').disabled = false;
+                }
+
+            } else {
+                // If nothing is selected, disable all controls
+                document.getElementById('colorPicker').value = '#ffffff';
+                document.getElementById('colorPicker').disabled = true;
+                
+                document.getElementById('massControl').disabled = true;
+                document.getElementById('restitutionControl').disabled = true;
+                document.getElementById('frictionControl').disabled = true;
+                document.getElementById('linearDampingControl').disabled = true;
+                document.getElementById('angularDampingControl').disabled = true;
+                
+                document.querySelectorAll('.kinematic-tool').forEach(button => button.disabled = true);
+                
+                explosionControlGroup.classList.add('hidden');
+                document.getElementById('explosionRateControl').disabled = true;
+                detonateButton.disabled = true;
+            }
+        }
+
+        /**
+         * Handles single click for object selection (Raycasting).
+         */
+        function onClick(event) {
+            // Ignore selection if currently dragging an object or moving the camera
+            if (isDragging || controls.state !== -1) return; 
+
+            const container = document.getElementById('scene-container');
+            const sidebarWidth = document.getElementById('editor-sidebar').clientWidth;
+            
+            // Adjust X coordinates because the sidebar takes up space
+            const clientXAdjusted = event.clientX - sidebarWidth;
+            
+            if (clientXAdjusted < 0 || clientXAdjusted > container.clientWidth) {
+                 selectObject(null);
+                 return;
+            }
+
+            // Normalize mouse coordinates based on the scene container size
+            mouse.x = (clientXAdjusted / container.clientWidth) * 2 - 1;
+            mouse.y = -(event.clientY / container.clientHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(objects, true);
+
+            if (intersects.length > 0) {
+                selectObject(intersects[0].object);
+                showCustomModal('Object Selected', `${intersects[0].object.userData.type} is ready for editing!`, 'indigo');
+            } else {
+                selectObject(null); // Deselect if clicking on empty space
+            }
+        }
+
+
+        /**
+         * Handles object deletion (double click).
+         */
+        function onDoubleClick(event) {
+            if (isDragging) return;
+
+            const container = document.getElementById('scene-container');
+            const sidebarWidth = document.getElementById('editor-sidebar').clientWidth;
+            const clientXAdjusted = event.clientX - sidebarWidth;
+            
+            if (clientXAdjusted < 0 || clientXAdjusted > container.clientWidth) return;
+
+            // Normalize mouse coordinates
+            mouse.x = (clientXAdjusted / container.clientWidth) * 2 - 1;
+            mouse.y = -(event.clientY / container.clientHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(objects, true);
+
+            if (intersects.length > 0) {
+                const objectToDelete = intersects[0].object;
+                
+                // Deselect if the object being deleted is the selected one
+                if (objectToDelete === selectedObject) {
+                    selectObject(null);
+                }
+                
+                // Remove from Three.js scene
+                scene.remove(objectToDelete);
+                objects.splice(objects.indexOf(objectToDelete), 1);
+                
+                // Remove from Cannon.js world and physical objects array
+                const body = objectToDelete.userData.body;
+                if (body && world) {
+                    world.removeBody(body);
+                    const indexToRemove = physicalObjects.findIndex(item => item.mesh === objectToDelete);
+                    if (indexToRemove !== -1) {
+                        physicalObjects.splice(indexToRemove, 1);
+                    }
+                }
+                
+                initDragControls(); // Update drag controls list
+                showCustomModal(`Deleted ${objectToDelete.userData.type}`, 'The object was successfully removed.', 'red');
+
+            } else {
+                showCustomModal('No Object Selected', 'Double-click missed all objects.', 'gray');
+            }
+        }
+        
+        /**
+         * Initializes or re-initializes the DragControls.
+         * MODIFIED: Calculates and applies velocity on dragend.
+         */
+        function initDragControls() {
+            if (dragControls) {
+                dragControls.dispose();
+            }
+            
+            dragControls = new DragControls(objects, camera, renderer.domElement);
+            
+            dragControls.addEventListener('dragstart', function (event) {
+                isDragging = true;
+                controls.enabled = false;
+                selectObject(event.object); 
+                event.object.material.emissive.set(0x444444); 
+                
+                // Store state for velocity calculation
+                previousPosition.copy(event.object.position);
+                dragStartTime = performance.now();
+                
+                // Make object temporarily static/immovable for smooth dragging
+                const body = event.object.userData.body;
+                if (body) {
+                    body.mass = 0; 
+                    body.updateInertiaWorld();
+                    body.velocity.set(0, 0, 0);
+                    body.angularVelocity.set(0, 0, 0);
+                }
+            });
+            
+            dragControls.addEventListener('drag', function(event) {
+                // Update previous position for calculation on drag end
+                previousPosition.copy(event.object.position); 
+            });
+
+
+            dragControls.addEventListener('dragend', function (event) {
+                isDragging = false;
+                controls.enabled = true;
+                event.object.material.emissive.set(0x000000); 
+                if (selectionBox) selectionBox.update();
+                
+                const body = event.object.userData.body;
+                
+                if (body) {
+                    // 1. Restore mass based on user settings
+                    const userHardness = selectedObject.userData.userHardness || 50;
+                    if (selectedObject.userData.isFrozen) {
+                        body.mass = 0;
+                        body.type = CANNON.Body.STATIC;
+                    } else if (selectedObject.userData.zeroGravity) {
+                        body.mass = 0.0001;
+                        body.type = CANNON.Body.DYNAMIC;
+                    } else {
+                        body.mass = mapHardnessToMass(userHardness);
+                        body.type = CANNON.Body.DYNAMIC;
+                    }
+                    body.updateInertiaWorld();
+
+                    // 2. Calculate and Apply Throw Velocity (Kinematic Drag)
+                    const dragTime = (performance.now() - dragStartTime) / 1000;
+                    
+                    if (dragTime > 0.01) {
+                        // Position change during the last frame (approximated by time since drag start)
+                        const velocityVector = new THREE.Vector3().subVectors(event.object.position, previousPosition);
+                        velocityVector.divideScalar(dragTime);
+                        
+                        // Apply a scale factor to make the throw more realistic/noticeable
+                        const throwFactor = 1.0; 
+                        
+                        if (body.mass > 0) {
+                            // Convert THREE.Vector3 to CANNON.Vec3 and apply
+                            body.velocity.set(
+                                velocityVector.x * throwFactor, 
+                                velocityVector.y * throwFactor, 
+                                velocityVector.z * throwFactor
+                            );
+                            body.wakeUp();
+                            showCustomModal('Throw Applied', 'Velocity calculated from drag speed.', 'indigo');
+                        } else {
+                            // If object is static/frozen, just update position without velocity
+                            body.velocity.set(0, 0, 0);
+                        }
+                    }
+
+                    // 3. Update the Cannon.js body position and rotation to match the final mesh position
+                    body.position.copy(event.object.position);
+                    body.quaternion.copy(event.object.quaternion);
+                }
+            });
+        }
+
+        // Toggles the physics simulation on and off
+        function togglePhysics() {
+            isPhysicsRunning = !isPhysicsRunning;
+            const button = document.getElementById('togglePhysics');
+            if (isPhysicsRunning) {
+                button.textContent = 'Pause Physics';
+                button.classList.remove('bg-yellow-600', 'hover:bg-yellow-700');
+                button.classList.add('bg-green-600', 'hover:bg-green-700');
+                showCustomModal('Simulation Running', 'The physics simulation is now running.', 'green');
+            } else {
+                button.textContent = 'Start Physics';
+                button.classList.remove('bg-green-600', 'hover:bg-green-700');
+                button.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
+                showCustomModal('Simulation Paused', 'The physics simulation is paused. Objects can still be moved manually.', 'orange');
+            }
+        }
+        
+        // Time Scale (Slow Motion)
+        function handleTimeScaleChange(event) {
+            const value = parseFloat(event.target.value);
+            timeScale = value;
+            document.getElementById('timeScaleValue').textContent = value.toFixed(2) + 'x';
+        }
+
+        // Handles changes to the global gravity value
+        function handleGravityChange(event) {
+            const value = parseFloat(event.target.value);
+            document.getElementById('gravityValue').textContent = value.toFixed(2);
+            if (world) {
+                world.gravity.set(0, value, 0); 
+            }
+        }
+        
+        // Explosion Rate Control
+        function handleExplosionRateChange(event) {
+            const rate = parseFloat(event.target.value);
+            document.getElementById('explosionRateValue').textContent = rate === 0 ? 'Off' : `${rate}s`;
+            
+            if (selectedObject && selectedObject.userData.type === 'DetonationCube') {
+                selectedObject.userData.explosionRate = rate;
+                // Reset timer when rate changes to avoid immediate detonation
+                selectedObject.userData.explosionTimer = rate; 
+                selectedObject.userData.isCountingDown = rate > 0;
+            }
+        }
+        
+        /**
+         * Triggers an explosion on the selected cube immediately.
+         */
+        function detonateSelectedCube() {
+            if (selectedObject && selectedObject.userData.type === 'DetonationCube') {
+                explode(selectedObject);
+            } else {
+                showCustomModal('Detonation Failed', 'Select a Detonation Cube to trigger the explosion.', 'red');
+            }
+        }
+
+        /**
+         * Maps user hardness (0-100) to physical mass (kg).
+         * Low hardness means very low mass and high flexibility.
+         */
+        function mapHardnessToMass(userHardness) {
+            // Low hardness (0-10) -> very low mass (0.1 - 0.5)
+            if (userHardness < 10) {
+                return 0.1 + 0.4 * (userHardness / 10.0);
+            }
+            // Medium-High hardness (10-100) -> medium-high mass (0.5 - 50 kg)
+            const minMass = 0.5;
+            const maxMass = 50.0;
+            return minMass + (maxMass - minMass) * ((userHardness - 10) / 90.0);
+        }
+        
+        /**
+         * Maps user hardness (0-100) to a display label.
+         */
+        function mapHardnessToWeightLabel(userHardness) {
+            if (userHardness < 10) return 'Very Soft / Light';
+            if (userHardness < 40) return 'Soft / Medium';
+            if (userHardness < 70) return 'Hard / Heavy';
+            if (userHardness < 95) return 'Rigid / Very Heavy';
+            return 'Perfectly Rigid';
+        }
+
+        /**
+         * Handles the new Hardness / Rigidity slider input.
+         */
+        function handleMassChange(event) {
+            const userHardness = parseFloat(event.target.value);
+            document.getElementById('massValue').textContent = mapHardnessToWeightLabel(userHardness);
+
+            if (!selectedObject || !selectedObject.userData.body) {
+                return;
+            }
+
+            const body = selectedObject.userData.body;
+            
+            selectedObject.userData.userHardness = userHardness;
+            
+            // --- Hardness Logic ---
+            const newMass = mapHardnessToMass(userHardness);
+            
+            // Link Hardness to Restitution for "bounciness"
+            // Low hardness (0) -> low restitution (0.0), High Hardness (100) -> normal restitution (0.5)
+            const newRestitution = userHardness / 200; // 0 to 0.5
+            body.material.restitution = newRestitution;
+            document.getElementById('restitutionControl').value = newRestitution.toFixed(1);
+            document.getElementById('restitutionValue').textContent = newRestitution.toFixed(1);
+            
+            // Apply mass rules
+            if (!selectedObject.userData.isFrozen && !selectedObject.userData.zeroGravity) {
+                body.mass = newMass;
+                body.type = CANNON.Body.DYNAMIC; 
+            } else if (selectedObject.userData.zeroGravity) {
+                body.mass = 0.0001;
+                body.type = CANNON.Body.DYNAMIC; 
+            } else {
+                body.mass = 0;
+                body.type = CANNON.Body.STATIC; 
+            }
+            
+            body.updateInertiaWorld();
+            body.wakeUp();
+            
+            showCustomModal('Hardness Changed', `Mass: ${newMass.toFixed(2)} kg, Bounciness: ${newRestitution.toFixed(1)}`, 'blue');
+        }
+
+        /**
+         * Handles color change from the picker input.
+         */
+        function handleColorChange(event) {
+            const newColor = event.target.value;
+            if (selectedObject && selectedObject.userData.type !== 'DetonationCube') {
+                selectedObject.material.color.set(newColor);
+            } else if (selectedObject) {
+                 showCustomModal('Cube Locked', 'Detonation Cubes must retain their explosive color.', 'red');
+            } else {
+                showCustomModal('No Object Selected', 'Please select an object first (single click) to change its color.', 'orange');
+            }
+        }
+
+        /**
+         * Handles changes to the simple physics sliders (Restitution, Friction, Damping).
+         */
+        function handlePhysicsControlChange(property, event) {
+            const value = parseFloat(event.target.value);
+            document.getElementById(`${property}Value`).textContent = value.toFixed(property.includes('Damping') ? 2 : 1);
+
+            if (!selectedObject || !selectedObject.userData.body) {
+                showCustomModal('No Object Selected', 'Please select an object first to change its physics properties.', 'orange');
+                return;
+            }
+
+            const body = selectedObject.userData.body;
+
+            switch (property) {
+                case 'restitution':
+                    body.material.restitution = value;
+                    break;
+                case 'friction':
+                    body.material.friction = value;
+                    break;
+                case 'linearDamping':
+                    body.linearDamping = value;
+                    break;
+                case 'angularDamping':
+                    body.angularDamping = value;
+                    break;
+            }
+            if (body.mass > 0) {
+                 body.wakeUp();
+            }
+        }
+        
+        /**
+         * Creates both a THREE.Mesh and a corresponding CANNON.Body.
+         */
+        function createObject(type, color, userHardness, startPosition = null) {
+            let geometry;
+            let cannonShape;
+            const size = 3; 
+            const radius = size / 2;
+            let material;
+            
+            // 1. Determine Geometry and Material
+            switch (type) {
+                case 'Box': geometry = new THREE.BoxGeometry(size, size, size); cannonShape = new CANNON.Box(new CANNON.Vec3(radius, radius, radius)); break;
+                case 'Sphere': geometry = new THREE.SphereGeometry(radius, 32, 32); cannonShape = new CANNON.Sphere(radius); break;
+                case 'Cylinder': 
+                    geometry = new THREE.CylinderGeometry(radius, radius, size, 32); 
+                    cannonShape = new CANNON.Cylinder(radius, radius, size, 16); 
+                    break;
+                case 'Cone': 
+                    geometry = new THREE.ConeGeometry(radius, size * 1.5, 32); 
+                    cannonShape = new CANNON.Cylinder(0.01, radius, size * 1.5, 16); 
+                    break;
+                case 'Capsule': 
+                    geometry = new THREE.CylinderGeometry(radius * 0.8, radius * 0.8, size * 1.5, 32); 
+                    cannonShape = new CANNON.Cylinder(radius * 0.8, radius * 0.8, size * 1.5, 16); 
+                    break;
+                case 'Octahedron':
+                    geometry = new THREE.OctahedronGeometry(radius * 1.5);
+                    // Convert Three.js geometry to Cannon.js ConvexPolyhedron
+                    const vertices = geometry.attributes.position.array;
+                    const points = [];
+                    for(let i = 0; i < vertices.length; i+=3) {
+                        points.push(new CANNON.Vec3(vertices[i], vertices[i+1], vertices[i+2]));
+                    }
+                    cannonShape = new CANNON.ConvexPolyhedron(points, geometry.index.array);
+                    break;
+                case 'Torus': // Donut Shape
+                    const tubeRadius = radius * 0.4;
+                    const ringRadius = radius * 1.2;
+                    geometry = new THREE.TorusGeometry(ringRadius, tubeRadius, 16, 100);
+                    
+                    // Cannon.js Compound shape approximation for the donut shape, which correctly models the hole
+                    const numSegments = 16; 
+                    cannonShape = new CANNON.Compound();
+                    const boxSize = tubeRadius / 1.5;
+                    const boxShape = new CANNON.Box(new CANNON.Vec3(boxSize, boxSize, boxSize));
+                    
+                    for (let i = 0; i < numSegments; i++) {
+                        const angle = (i / numSegments) * Math.PI * 2;
+                        const x = Math.cos(angle) * ringRadius;
+                        const z = Math.sin(angle) * ringRadius;
+                        const pos = new CANNON.Vec3(x, 0, z);
+                        
+                        // Rotate the box so it is tangent to the ring
+                        const quat = new CANNON.Quaternion();
+                        quat.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), angle + Math.PI / 2);
+
+                        cannonShape.addChild(boxShape, pos, quat);
+                    }
+                    
+                    break;
+                case 'DetonationCube': 
+                    geometry = new THREE.BoxGeometry(size, size, size);
+                    // Use a standard material, but make it bright orange/red/yellow and highly emissive
+                    material = new THREE.MeshPhongMaterial({
+                        color: 0xff4500, // OrangeRed base
+                        emissive: 0xffd700, // Gold emissive (simulating heat/fire)
+                        emissiveIntensity: 0.8,
+                        shininess: 100,
+                        wireframe: false,
+                    });
+                    cannonShape = new CANNON.Box(new CANNON.Vec3(radius, radius, radius));
+                    break;
+                default: return;
+            }
+
+            // For Cylinder/Cone/Capsule, rotate Cannon shape to match Three.js orientation (Y-axis up)
+            if (type === 'Cylinder' || type === 'Cone' || type === 'Capsule') {
+                const quat = new CANNON.Quaternion();
+                quat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+                cannonShape.transformAllPoints(new CANNON.Vec3(0, 0, 0), quat);
+            }
+
+            if (type !== 'DetonationCube') {
+                 material = new THREE.MeshPhongMaterial({
+                    color: color,
+                    specular: 0x111111,
+                    shininess: 30,
+                    wireframe: false,
+                });
+            }
+
+            // 2. Initial Position
+            const initialMass = mapHardnessToMass(userHardness);
+            const initialRestitution = userHardness / 200; // Initialize restitution based on hardness
+            const defaultDamping = 0.05;
+            const mesh = new THREE.Mesh(geometry, material);
+            
+            let startX, startY, startZ;
+            if (startPosition) {
+                startX = startPosition.x;
+                startY = startPosition.y;
+                startZ = startPosition.z;
+            } else {
+                startX = (Math.random() - 0.5) * 20;
+                startY = size * 5 + Math.random() * 10; // Start high up to drop
+                startZ = (Math.random() - 0.5) * 20;
+            }
+            
+            mesh.position.set(startX, startY, startZ);
+
+            // 3. Create CANNON Body
+            const cannonBody = new CANNON.Body({ 
+                mass: initialMass,
+                position: new CANNON.Vec3(startX, startY, startZ),
+                shape: cannonShape,
+                material: new CANNON.Material({ friction: 0.5, restitution: initialRestitution }) 
+            });
+            cannonBody.linearDamping = defaultDamping; 
+            cannonBody.angularDamping = defaultDamping; 
+
+            world.addBody(cannonBody);
+            
+            // 4. Link objects and add to tracking arrays
+            mesh.userData = { 
+                type: type, 
+                body: cannonBody, 
+                userHardness: userHardness, // Stored the new hardness value
+                zeroGravity: false, 
+                isFrozen: false
+            }; 
+            
+            // Detonation Cube specific data
+            if (type === 'DetonationCube') {
+                 mesh.userData.explosionRate = 0; // Seconds between auto-detonation
+                 mesh.userData.explosionTimer = 0; 
+                 mesh.userData.isCountingDown = false;
+            }
+            
+            objects.push(mesh);
+            physicalObjects.push({ mesh, body: cannonBody }); 
+
+            scene.add(mesh);
+            initDragControls(); 
+            selectObject(mesh); // Select the newly created object
+        }
+
+        function addShape(type) {
+            const color = getNextColor();
+            const userHardness = 50; // Default to mid-range
+            createObject(type, color, userHardness);
+        }
+
+        function getNextColor() {
+            const color = colorPalette[colorIndex % colorPalette.length];
+            colorIndex++;
+            return color;
+        }
+        
+        /**
+         * Performs a radial explosion around the explosion cube.
+         * @param {THREE.Mesh} cubeMesh The cube that is exploding.
+         */
+        function explode(cubeMesh) {
+            const position = new CANNON.Vec3().copy(cubeMesh.position);
+            const explosionStrength = 1500; // Strong impulse magnitude
+            const radius = 8; // Radius of effect
+
+            // 1. Apply Impulse to surrounding objects
+            for (const item of physicalObjects) {
+                const body = item.body;
+                
+                if (body.mass === 0 || item.mesh === cubeMesh) continue; // Skip static/exploding object
+
+                const distance = body.position.distanceTo(position);
+                if (distance < radius) {
+                    const direction = new CANNON.Vec3();
+                    // Direction vector from explosion center to body
+                    body.position.vsub(position, direction); 
+                    direction.normalize();
+                    
+                    // Inverse square falloff for realistic force
+                    const attenuation = 1 - (distance / radius);
+                    
+                    // Apply impulse (Force * TimeStep, where force is Strength * Attenuation * Direction)
+                    const impulseMagnitude = explosionStrength * attenuation;
+                    
+                    const impulse = direction.scale(impulseMagnitude);
+
+                    body.applyImpulse(impulse, body.position);
+                    body.wakeUp();
+                }
+            }
+            
+            // 2. Visual/State Cleanup
+            showCustomModal('BOOM!', 'A radial impulse was applied to surrounding dynamic objects!', 'red');
+
+            // Visually fade and remove the cube after a short delay
+            cubeMesh.material.color.set(0x000000);
+            cubeMesh.material.emissiveIntensity = 0;
+            
+            // If the user didn't hit detonateNow, reset the auto-timer state
+            if (cubeMesh.userData.explosionRate > 0) {
+                cubeMesh.userData.explosionTimer = cubeMesh.userData.explosionRate;
+            } else {
+                cubeMesh.userData.explosionRate = 0;
+            }
+            cubeMesh.userData.isCountingDown = cubeMesh.userData.explosionRate > 0;
+            
+            // Remove the mesh and its body (or just teleport it far away) for simplicity
+            setTimeout(() => {
+                cubeMesh.userData.body.position.set(0, -100, 0); // Move far below the scene
+            }, 500);
+
+            // Re-select null to refresh UI if the exploding object was selected
+            if (selectedObject === cubeMesh) {
+                selectObject(null);
+            }
+        }
+        
+        // Custom Modal UI handler (replaces alert/confirm)
+        function showCustomModal(title, message, color) {
+            const modal = document.getElementById('custom-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalMessage = document.getElementById('modal-message');
+            const colorMap = {
+                'indigo': 'text-indigo-700 border-indigo-500',
+                'red': 'text-red-700 border-red-500',
+                'orange': 'text-orange-700 border-orange-500',
+                'green': 'text-green-700 border-green-500',
+                'gray': 'text-gray-700 border-gray-500',
+                'blue': 'text-blue-700 border-blue-500',
+                'purple': 'text-purple-700 border-purple-500',
+                'cyan': 'text-cyan-700 border-cyan-500',
+                'teal': 'text-teal-700 border-teal-500',
+                'yellow': 'text-yellow-700 border-yellow-500'
+            };
+            
+            const modalContent = modal.querySelector('div');
+            modalContent.className = 'bg-white p-4 rounded-xl shadow-2xl max-w-sm w-full text-center border-l-4 ' + (colorMap[color] || colorMap['indigo']);
+
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            modal.classList.remove('hidden', 'opacity-0');
+            modal.classList.add('opacity-100');
+
+
+            // Hide the modal after 3 seconds
+            setTimeout(() => {
+                modal.classList.remove('opacity-100');
+                modal.classList.add('opacity-0');
+                setTimeout(() => modal.classList.add('hidden'), 300); // Wait for transition
+            }, 3000);
+        }
+
+        // Other Kinematic Tools (Reset, Clone, Teleport, Freeze, etc.) remain as they were, 
+        // using the updated physics logic (mapHardnessToMass, etc.).
+        
+        function resetSelectedObject() {
+            if (!selectedObject || !selectedObject.userData.body) { showCustomModal('No Object Selected', 'Select an object to reset its position and movement.', 'orange'); return; }
+            const body = selectedObject.userData.body;
+            const size = selectedObject.geometry.boundingSphere ? selectedObject.geometry.boundingSphere.radius * 2 : 3;
+            const startX = (Math.random() - 0.5) * 10;
+            const startY = size * 5 + Math.random() * 5; 
+            const startZ = (Math.random() - 0.5) * 10;
+            body.position.set(startX, startY, startZ);
+            body.quaternion.set(0, 0, 0, 1);
+            const userHardness = selectedObject.userData.userHardness || 50;
+            body.mass = mapHardnessToMass(userHardness); 
+            body.type = CANNON.Body.DYNAMIC;
+            selectedObject.userData.zeroGravity = false;
+            selectedObject.userData.isFrozen = false;
+            body.velocity.set(0, 0, 0);
+            body.angularVelocity.set(0, 0, 0);
+            body.wakeUp();
+            selectObject(selectedObject);
+            showCustomModal('Object Reset', `${selectedObject.userData.type} has been reset to starting position & dynamic state.`, 'indigo');
+        }
+        
+        function cloneSelectedObject() {
+            if (!selectedObject) { showCustomModal('No Object Selected', 'Select an object to clone.', 'orange'); return; }
+            const type = selectedObject.userData.type;
+            const userHardness = selectedObject.userData.userHardness || 50;
+            const color = selectedObject.material.color.getHex();
+            const position = selectedObject.position.clone();
+            position.y += 2; 
+            createObject(type, color, userHardness, position); 
+            showCustomModal('Object Cloned', `A copy of the ${type} was created!`, 'indigo');
+        }
+        
+        function applyImpulseToSelected(impulseDirection, name) {
+            if (!selectedObject || !selectedObject.userData.body) { showCustomModal('No Object Selected', 'Select an object to apply an impulse.', 'orange'); return; }
+            const body = selectedObject.userData.body;
+            if (body.mass <= 0.0001) { showCustomModal('Static/Weightless Object', 'Impulses work best on objects with mass. Unfreeze or enable gravity first.', 'red'); return; }
+            body.wakeUp();
+            const strength = body.mass * 1.5; 
+            const impulse = impulseDirection.clone().scale(strength / 30);
+            body.applyImpulse(impulse, body.position);
+            showCustomModal(name, `Applied ${name} impulse!`, 'orange');
+        }
+        
+        function freezeObject() {
+            if (!selectedObject || !selectedObject.userData.body) return;
+            const body = selectedObject.userData.body;
+            selectedObject.userData.isFrozen = !selectedObject.userData.isFrozen;
+            if (selectedObject.userData.isFrozen) {
+                body.mass = 0;
+                body.type = CANNON.Body.STATIC;
+                body.velocity.set(0, 0, 0);
+                body.angularVelocity.set(0, 0, 0);
+                showCustomModal('Object Frozen', 'The object is now static and cannot be moved by physics.', 'red');
+            } else {
+                body.type = CANNON.Body.DYNAMIC; 
+                if (selectedObject.userData.zeroGravity) { body.mass = 0.0001; } else { const userHardness = selectedObject.userData.userHardness || 50; body.mass = mapHardnessToMass(userHardness); }
+                body.updateInertiaWorld();
+                body.wakeUp();
+                showCustomModal('Object Unfrozen', 'The object is now dynamic again.', 'green');
+            }
+            selectObject(selectedObject);
+        }
+        
+        function toggleObjectGravity() {
+            if (!selectedObject || !selectedObject.userData.body) return;
+            const body = selectedObject.userData.body;
+            if (selectedObject.userData.isFrozen) { showCustomModal('Frozen Object', 'Unfreeze the object before changing its gravity state.', 'red'); return; }
+
+            selectedObject.userData.zeroGravity = !selectedObject.userData.zeroGravity;
+
+            const userHardness = selectedObject.userData.userHardness || 50;
+            
+            if (selectedObject.userData.zeroGravity) {
+                body.mass = 0.0001;
+                body.updateInertiaWorld();
+                body.wakeUp();
+                showCustomModal('Zero Gravity ON', 'Object is now weightless (can still be pushed).', 'gray');
+            } else {
+                body.mass = mapHardnessToMass(userHardness);
+                body.updateInertiaWorld();
+                body.wakeUp();
+                showCustomModal('Zero Gravity OFF', 'Object is subject to global gravity.', 'blue');
+            }
+            selectObject(selectedObject);
+        }
+        
+        function teleportObject() {
+             if (!selectedObject || !selectedObject.userData.body) { showCustomModal('No Object Selected', 'Select an object to teleport.', 'orange'); return; }
+             const body = selectedObject.userData.body;
+             const newX = (Math.random() - 0.5) * 40; 
+             const newY = 20 + Math.random() * 10; 
+             const newZ = (Math.random() - 0.5) * 40; 
+             body.position.set(newX, newY, newZ);
+             body.velocity.set(0, 0, 0);
+             body.angularVelocity.set(0, 0, 0);
+             body.wakeUp();
+             showCustomModal('Teleported', 'Object moved to a random new location!', 'purple');
+        }
+
+        function spinSelectedObject() {
+            if (!selectedObject || !selectedObject.userData.body) return;
+            const body = selectedObject.userData.body;
+            if (body.mass <= 0.0001) { showCustomModal('Static/Weightless Object', 'Cannot spin a static object. Unfreeze or enable gravity first.', 'red'); return; }
+            body.wakeUp();
+            const spinRate = 30;
+            body.angularVelocity.set( (Math.random() - 0.5) * spinRate, (Math.random() - 0.5) * spinRate, (Math.random() - 0.5) * spinRate );
+            showCustomModal('SPIN!', 'Applied random angular velocity!', 'cyan');
+        }
+
+        function clearObjectVelocity() {
+            if (!selectedObject || !selectedObject.userData.body) return;
+            const body = selectedObject.userData.body;
+            body.velocity.set(0, 0, 0);
+            body.angularVelocity.set(0, 0, 0);
+            body.wakeUp();
+            showCustomModal('Velocity Cleared', 'Object movement and rotation have stopped instantly.', 'teal');
+        }
+        
+        function toggleWireframe() {
+            if (!selectedObject) { showCustomModal('No Object Selected', 'Select an object to toggle its wireframe view.', 'orange'); return; }
+            selectedObject.material.wireframe = !selectedObject.material.wireframe;
+            selectObject(selectedObject);
+            if (selectedObject.material.wireframe) { showCustomModal('Wireframe Enabled', 'Showing mesh geometry outline.', 'yellow'); } else { showCustomModal('Solid Mesh Enabled', 'Showing solid surface.', 'yellow'); }
+        }
+
+        function clearScene() {
+            objects.forEach(mesh => scene.remove(mesh));
+            if (world) { physicalObjects.forEach(item => world.removeBody(item.body)); }
+            objects.length = 0;
+            physicalObjects.length = 0;
+            selectObject(null);
+            if (dragControls) initDragControls(); 
+            showCustomModal('Scene Cleared', 'All objects have been removed from the scene.', 'red');
+        }
+        
+        function onWindowResize() {
+            const container = document.getElementById('scene-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta(); // Time elapsed since last frame
+            controls.update(); 
+            
+            // Step the physics world and update 3D mesh positions ONLY if running
+            if (world && isPhysicsRunning) {
+                // Apply global time scale for slow motion
+                world.step(timeStep * timeScale, delta); 
+                
+                // Update Three.js positions from Cannon.js bodies
+                for (const item of physicalObjects) {
+                    item.mesh.position.copy(item.body.position);
+                    item.mesh.quaternion.copy(item.body.quaternion);
+                    
+                    // Detonation Cube Timer Logic
+                    if (item.mesh.userData.type === 'DetonationCube' && item.mesh.userData.isCountingDown) {
+                        item.mesh.userData.explosionTimer -= delta * timeScale;
+                        
+                        if (item.mesh.userData.explosionTimer <= 0) {
+                            explode(item.mesh);
+                            // The explosion function resets the timer logic internally
+                        }
+                    }
+                }
+            }
+
+            if (selectionBox) {
+                selectionBox.update(); // Keep the highlight box wrapped around the object
+            }
+            renderer.render(scene, camera);
+        }
+
+        // Start everything when the window loads
+        window.onload = init;
+    </script>
+
+<script id="poppy-holo-ui-script">
+(function(){
+  // Avoid polluting or changing existing functions - only safe UI wiring
+  const toggle = document.getElementById('poppyHoloToggle');
+  const drawer = document.getElementById('poppyHoloDrawer');
+  const closeBtn = document.getElementById('poppyClose');
+
+  function openDrawer(){
+    drawer.classList.add('open');
+    drawer.setAttribute('aria-hidden','false');
+  }
+  function closeDrawer(){
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden','true');
+  }
+
+  toggle && toggle.addEventListener('click', ()=>{ 
+    if(drawer.classList.contains('open')) closeDrawer(); else openDrawer();
+  });
+  closeBtn && closeBtn.addEventListener('click', closeDrawer);
+
+  // Tab switching
+  document.querySelectorAll('.poppyTab').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.poppyTab').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.getAttribute('data-tab');
+      document.querySelectorAll('.poppySection').forEach(s=>s.classList.remove('active'));
+      const panel = document.getElementById('tab-' + tab);
+      panel && panel.classList.add('active');
+    });
+  });
+
+  // Wire audio volume control to window.SFX if present
+  const sfxRange = document.getElementById('poppySfxRange');
+  const sfxVal = document.getElementById('poppySfxVal');
+  if(sfxRange){
+    sfxRange.addEventListener('input', (e)=>{
+      const v = Number(e.target.value)/100;
+      sfxVal.innerText = String(e.target.value);
+      try{ if(window.SFX) window.SFX.volume = v; } catch(e){}
+    });
+    // initialize from existing SFX
+    try{ if(window.SFX) { sfxRange.value = String(Math.floor(window.SFX.volume*100)); sfxVal.innerText = String(Math.floor(window.SFX.volume*100)); } } catch(e){}
+  }
+
+  // Master mute
+  const muteBtn = document.getElementById('poppyMasterMute');
+  muteBtn && muteBtn.addEventListener('click', ()=>{
+    if(!window.SFX) return;
+    window.SFX.volume = window.SFX.volume > 0 ? 0 : 0.8;
+    muteBtn.innerText = window.SFX.volume === 0 ? 'Muted' : 'Unmuted';
+    try{ document.getElementById('poppySfxRange').value = String(Math.floor((window.SFX.volume||0.8)*100)); document.getElementById('poppySfxVal').innerText = String(Math.floor((window.SFX.volume||0.8)*100)); }catch(e){}
+  });
+
+  // Simple UI toggles that call existing functions if present
+  const spawnPreviewBtn = document.getElementById('ui_spawnPreview');
+  spawnPreviewBtn && spawnPreviewBtn.addEventListener('click', ()=>{
+    // toggle text only; if app has function toggleSpawnPreview, call it
+    spawnPreviewBtn.innerText = spawnPreviewBtn.innerText === 'Toggle' ? 'On' : 'Toggle';
+    try{ if(typeof window.toggleSpawnPreview === 'function') window.toggleSpawnPreview(); }catch(e){}
+  });
+
+  const gridSnapBtn = document.getElementById('ui_gridSnap');
+  gridSnapBtn && gridSnapBtn.addEventListener('click', ()=>{
+    gridSnapBtn.innerText = gridSnapBtn.innerText === 'Off' ? 'On' : 'Off';
+    try{ if(typeof window.toggleGridSnap === 'function') window.toggleGridSnap(); }catch(e){}
+  });
+
+  // Visual controls (affect CSS variables if present)
+  const hudRange = document.getElementById('poppyHudOpacity');
+  hudRange && hudRange.addEventListener('input', (e)=>{
+    const v = Number(e.target.value)/100;
+    try{ document.documentElement.style.setProperty('--poppy-hud-opacity', String(v)); }catch(e){}
+  });
+
+  const accentRange = document.getElementById('poppyAccentIntensity');
+  accentRange && accentRange.addEventListener('input', (e)=>{
+    const v = Number(e.target.value)/100;
+    // adjust glow strength for newly injected styles (non-invasive)
+    const style = document.getElementById('poppy-holo-ui-style');
+    if(style) style.textContent = style.textContent.replace(/opacity:\s*0\.95/, 'opacity: ' + (0.35 + v*0.6).toFixed(2));
+  });
+
+  // Reset UI preferences (only resets UI elements we added)
+  const resetBtn = document.getElementById('poppyResetUi');
+  resetBtn && resetBtn.addEventListener('click', ()=>{
+    try{
+      document.getElementById('poppySfxRange').value = '80'; document.getElementById('poppySfxVal').innerText='80';
+      document.getElementById('poppyHudOpacity').value = '92';
+      document.getElementById('poppyAccentIntensity').value = '80';
+      if(window.SFX) window.SFX.volume = 0.8;
+      // close drawer for visual feedback
+      drawer && drawer.classList.remove('open');
+    }catch(e){}
+  });
+
+  // Toggle animations simple
+  const animBtn = document.getElementById('poppyToggleAnim');
+  animBtn && animBtn.addEventListener('click', ()=>{
+    const on = animBtn.innerText === 'On';
+    animBtn.innerText = on ? 'Off' : 'On';
+    if(on){ document.documentElement.style.setProperty('--poppy-anim', 'none'); } else { document.documentElement.style.removeProperty('--poppy-anim'); }
+  });
+
+  // Accessibility: close drawer with ESC
+  window.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') drawer && drawer.classList.remove('open'); });
+
+})();
+</script>
+
+
+<script id="poppy-move-ui-script">
+document.addEventListener('DOMContentLoaded', function(){
+  try{
+    var source = document.getElementById('editor-sidebar') || document.querySelector('.editor-sidebar') || document.getElementById('left-panel') || document.getElementById('right-panel');
+    var target = document.getElementById('tab-visual');
+    if(source && target){
+      // make a clone to avoid breaking references then hide original
+      var clone = source.cloneNode(true);
+      clone.id = 'editor-sidebar-clone';
+      clone.style.marginTop = '8px';
+      // strip heavy positioning to fit into drawer
+      clone.style.position = 'static';
+      clone.style.width = '100%';
+      // hide original but keep it in DOM to preserve scripts referencing it
+      source.style.display = 'none';
+      // append clone into visual tab
+      target.appendChild(clone);
+
+      // Improve cloned buttons styling slightly to match hologram look
+      clone.querySelectorAll('button').forEach(function(b){
+        b.classList.add('poppyButton');
+        b.style.border = '1px solid rgba(255,255,255,0.04)';
+        b.style.background = 'linear-gradient(90deg, rgba(99,102,241,0.12), rgba(124,58,237,0.06))';
+        b.style.color = '#fff';
+      });
+    } else {
+      // fallback: try to find main tools container and move it
+      var fallback = document.querySelector('[data-tools]') || document.querySelector('.tools') || document.querySelector('.controls');
+      if(fallback && target){
+        var clone2 = fallback.cloneNode(true);
+        clone2.id = 'tools-clone';
+        fallback.style.display = 'none';
+        target.appendChild(clone2);
+      }
+    }
+  }catch(err){
+    console.warn('Poppy UI move error', err);
+  }
+});
+</script>
+
+
+<script id="poppy-grid-star-opt">
+(function(){
+  // helper to get globals safely
+  function g(name){ try{ return window[name]; }catch(e){ return undefined; } }
+
+  const THREE = g('THREE') || (window.THREE);
+  const scene = g('scene') || window.scene;
+  const renderer = g('renderer') || window.renderer || (window.THREE && window.renderer);
+  const world = g('world') || window.world || (window.CANNON && window.world);
+
+  function setGridStyle(){
+    try{
+      if(!THREE || !scene) return;
+      let found=false;
+      scene.traverse(function(obj){
+        if(obj && obj.type === 'GridHelper'){
+          found=true;
+          if(obj.material){
+            if(obj.material.color) obj.material.color = new THREE.Color(0.45,0.32,0.98); // purple-blue
+            obj.material.opacity = 0.55;
+            obj.material.transparent = true;
+            obj.material.needsUpdate = true;
+          }
+          // subtle scale fade
+          obj.renderOrder = 0;
+        }
+      });
+      if(!found){
+        // create a cheap grid helper
+        const size = 2000;
+        const divisions = 200;
+        const grid = new THREE.GridHelper(size, divisions, 0x9b8cff, 0x3aa7ff);
+        grid.material.opacity = 0.55;
+        grid.material.transparent = true;
+        grid.position.y = 0;
+        scene.add(grid);
+        grid.userData._poppy_injected = true;
+      }
+    }catch(e){ console.warn('grid style error',e); }
+  }
+
+  // Create low-cost starfield (points)
+  function createStarfield(){
+    try{
+      if(!THREE || !scene) return;
+      if(scene.userData._poppy_starfield) return;
+      const count = 600;
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(count*3);
+      const colors = new Float32Array(count*3);
+      for(let i=0;i<count;i++){
+        const r = 800 + Math.random()*1600;
+        const theta = Math.random()*Math.PI*2;
+        const phi = Math.acos((Math.random()*2)-1);
+        // distribute on a shell so they appear distant
+        const x = Math.sin(phi)*Math.cos(theta)*r;
+        const y = Math.sin(phi)*Math.sin(theta)*r*0.45 + 40; // more above horizon
+        const z = Math.cos(phi)*r;
+        positions[i*3]=x; positions[i*3+1]=y; positions[i*3+2]=z;
+        // color purpleish-white
+        const c = 0.8 + Math.random()*0.2;
+        colors[i*3] = 0.9*c; // r
+        colors[i*3+1] = 0.8*c; // g
+        colors[i*3+2] = 1.0*c; // b
+      }
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions,3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors,3));
+      const material = new THREE.PointsMaterial({
+        size: 1.4,
+        vertexColors: true,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.95
+      });
+      const points = new THREE.Points(geometry, material);
+      points.frustumCulled = false;
+      points.userData._poppy_star = true;
+      scene.add(points);
+      scene.userData._poppy_starfield = points;
+    }catch(e){ console.warn('starfield error',e); }
+  }
+
+  // Twinkle by subtle scale/pulse using shader-less approach
+  function twinkleStars(){
+    try{
+      const points = scene && scene.userData && scene.userData._poppy_starfield;
+      if(!points) return;
+      const geom = points.geometry;
+      const pos = geom.attributes.position.array;
+      const time = Date.now()*0.001;
+      // adjust material opacity slightly
+      const mat = points.material;
+      mat.opacity = 0.7 + Math.sin(time*0.6)*0.18;
+      // small jitter on positions (cheap)
+      if(!geom.userData.basePositions){
+        geom.userData.basePositions = new Float32Array(pos);
+      }
+      const base = geom.userData.basePositions;
+      for(let i=0;i<pos.length;i+=3){
+        const jitter = Math.sin(time*0.5 + i)*0.0005;
+        pos[i] = base[i]*(1 + jitter);
+        pos[i+1] = base[i+1]*(1 + jitter*0.6);
+        pos[i+2] = base[i+2]*(1 + jitter*0.9);
+      }
+      geom.attributes.position.needsUpdate = true;
+    }catch(e){}
+  }
+
+  // Performance tuning
+  function applyPerformanceMode(on){
+    try{
+      if(renderer && renderer.setPixelRatio){
+        if(on) renderer.setPixelRatio(1);
+        else renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
+        renderer.getContext && renderer.getContext(); // noop to avoid linter
+      }
+      if(world && world.solver && typeof world.solver.iterations === 'number'){
+        world.solver.iterations = on ? 6 : 10;
+      }
+      // disable shadows in perf mode if available
+      if(renderer && renderer.shadowMap){
+        renderer.shadowMap.enabled = !on;
+      }
+    }catch(e){ console.warn('perf mode error', e); }
+  }
+
+  // Attempt safe initial tweaks on load and on animation loops
+  document.addEventListener('DOMContentLoaded', function(){
+    // try to set grid and starfield when scene available
+    setTimeout(function(){
+      setGridStyle();
+      createStarfield();
+      // default perf adjustments
+      applyPerformanceMode(true);
+    }, 400);
+  });
+
+  // Minimal loop for twinkle that is cheap
+  let lastTick = 0;
+  function tick(){
+    requestAnimationFrame(tick);
+    const now = performance.now();
+    if(now - lastTick > 90){ // ~11fps for twinkle updates, cheap
+      lastTick = now;
+      try{ twinkleStars(); }catch(e){}
+    }
+  }
+  tick();
+
+  // Expose controls for settings UI to call
+  window.POPPY_VISUALS = {
+    setGridStyle: setGridStyle,
+    createStarfield: createStarfield,
+    removeStarfield: function(){ try{ if(scene && scene.userData && scene.userData._poppy_starfield){ scene.remove(scene.userData._poppy_starfield); delete scene.userData._poppy_starfield; } }catch(e){} },
+    applyPerformanceMode: applyPerformanceMode,
+    toggleStarfield: function(){ try{ if(scene && scene.userData && scene.userData._poppy_starfield) { window.POPPY_VISUALS.removeStarfield(); } else { createStarfield(); } }catch(e){} }
+  };
+
+  // Wire into existing settings UI if present (tab-visual)
+  try{
+    var visual = document.getElementById('tab-visual') || document.querySelector('#tab-visual');
+    if(visual){
+      // add controls if not already added
+      if(!document.getElementById('poppyGridToggle')){
+        var div = document.createElement('div');
+        div.className='poppyControl';
+        div.innerHTML = '<label>Grid Style</label><button id="poppyGridToggle" class="poppyButton">Apply</button>';
+        visual.appendChild(div);
+        document.getElementById('poppyGridToggle').addEventListener('click', function(){ setGridStyle(); });
+      }
+      if(!document.getElementById('poppyStarToggle')){
+        var div2 = document.createElement('div');
+        div2.className='poppyControl';
+        div2.innerHTML = '<label>Starfield</label><button id="poppyStarToggle" class="poppyButton">Toggle</button>';
+        visual.appendChild(div2);
+        document.getElementById('poppyStarToggle').addEventListener('click', function(){ window.POPPY_VISUALS.toggleStarfield(); });
+      }
+      if(!document.getElementById('poppyPerfToggle')){
+        var div3 = document.createElement('div');
+        div3.className='poppyControl';
+        div3.innerHTML = '<label>Performance Mode</label><button id="poppyPerfToggle" class="poppyButton">On</button>';
+        visual.appendChild(div3);
+        var perfOn = true;
+        document.getElementById('poppyPerfToggle').addEventListener('click', function(){
+          perfOn = !perfOn;
+          window.POPPY_VISUALS.applyPerformanceMode(perfOn);
+          this.innerText = perfOn ? 'On' : 'Off';
+        });
+      }
+    }
+  }catch(e){}
+
+})();
+</script>
+
+
+<!-- EXTRA: CSS Starfield & Infinite Grid Fallback (visible even if no THREE scene) -->
+<style id="poppy-extra-visuals">
+/* CSS starfield: cheap, repeating dots */
+#poppyCssStars.fullscreen {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(230,230,255,0.95) 0px, rgba(230,230,255,0.0) 2px),
+    radial-gradient(circle at 30% 70%, rgba(200,190,255,0.85) 0px, rgba(200,190,255,0.0) 2px),
+    radial-gradient(circle at 50% 40%, rgba(220,240,255,0.9) 0px, rgba(220,240,255,0.0) 2px),
+    radial-gradient(circle at 80% 10%, rgba(210,200,255,0.85) 0px, rgba(210,200,255,0.0) 2px);
+  background-size: 8% 8%, 6% 6%, 7% 7%, 5% 5%;
+  mix-blend-mode: screen;
+  opacity: 0.95;
+  z-index: -10000;
+  will-change: opacity, transform;
+}
+
+/* Twinkle animation */
+@keyframes poppy-twinkle {
+  0% { opacity: 0.7; transform: translateY(0px) scale(1); }
+  50% { opacity: 1; transform: translateY(-1px) scale(1.02); }
+  100% { opacity: 0.75; transform: translateY(0px) scale(1); }
+}
+#poppyCssStars.fullscreen { animation: poppy-twinkle 6s ease-in-out infinite; }
+
+/* CSS infinite grid illusion */
+#poppyGridCss.infinite {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 60vh;
+  z-index: -9999;
+  background-image:
+    linear-gradient(rgba(124,90,255,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(110,231,255,0.04) 1px, transparent 1px);
+  background-size: 36px 36px, 36px 36px;
+  transform-origin: center bottom;
+  opacity: 0.95;
+  will-change: transform;
+  backdrop-filter: blur(0.2px);
+}
+
+/* subtle parallax for grid when pointer moves */
+body:not(.touch) #poppyGridCss.infinite {
+  transition: transform 200ms linear;
+}
+
+/* make splash words impact stronger when active */
+.poppyImpactWord.active {
+  opacity:1 !important;
+  transform: scale(1.15) !important;
+  transition: transform 240ms cubic-bezier(.2,.9,.25,1), opacity 200ms;
+  text-shadow: 0 18px 50px rgba(124,58,237,0.35);
+}
+</style>
+
+<script id="poppy-extra-script">
+(function(){
+  // ensure CSS starfield and grid exist for fallback visualization
+  if(!document.getElementById('poppyCssStars')){
+    var s = document.createElement('div');
+    s.id = 'poppyCssStars';
+    s.className = 'fullscreen';
+    document.body.appendChild(s);
+  } else {
+    document.getElementById('poppyCssStars').classList.add('fullscreen');
+  }
+  if(!document.getElementById('poppyGridCss')){
+    var g = document.createElement('div');
+    g.id = 'poppyGridCss';
+    g.className = 'infinite';
+    document.body.appendChild(g);
+  } else {
+    document.getElementById('poppyGridCss').classList.add('infinite');
+  }
+
+  // parallax effect for grid based on pointer (cheap)
+  var grid = document.getElementById('poppyGridCss');
+  function onMove(e){
+    if(!grid) return;
+    var x = (e.clientX - window.innerWidth/2)/window.innerWidth;
+    var y = (e.clientY - window.innerHeight/2)/window.innerHeight;
+    grid.style.transform = 'translate3d(' + (x*8) + 'px,' + (y*4) + 'px,0) scale(1.02)';
+  }
+  if('ontouchstart' in window){ document.body.classList.add('touch'); } else {
+    window.addEventListener('mousemove', onMove);
+  }
+
+  // Hook into THREE fallback: if scene exists, prefer 3D starfield and large grid instead of CSS
+  function preferThreeVisuals(){
+    try{
+      if(typeof THREE !== 'undefined' && window.scene){
+        // hide css versions if three will show better visuals
+        var s = document.getElementById('poppyCssStars'); if(s) s.style.display='none';
+        var g = document.getElementById('poppyGridCss'); if(g) g.style.display='none';
+      }
+    }catch(e){}
+  }
+  setTimeout(preferThreeVisuals,800);
+})();
+</script>
+
+<!-- HEAVEN GPT: Lightweight assistant UI (local mock + optional API integration) -->
+<style id="poppy-heaven-style">
+/* small assistant panel inside drawer */
+#poppyHeavenPanel{ margin-top:10px; padding:8px; border-radius:10px; background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.03); }
+#poppyHeavenPanel textarea{ width:100%; min-height:60px; resize:vertical; border-radius:8px; padding:8px; background: rgba(0,0,0,0.25); color:#e6eef8; border:1px solid rgba(255,255,255,0.03); }
+#poppyHeavenPanel .poppyHeavenSend{ margin-top:8px; display:flex; gap:8px; align-items:center; }
+#poppyHeavenPanel .poppyHeavenMessages{ max-height:140px; overflow:auto; margin-top:8px; font-size:13px; color:#cfe6ff; }
+.poppyHeavenMsg{ padding:6px 8px; border-radius:8px; background: rgba(255,255,255,0.02); margin-bottom:6px; }
+</style>
+
+<script id="poppy-heaven-script">
+(function(){
+  // Add Heaven assistant UI into 3D tab content area
+  function ensureHeavenUI(){
+    try{
+      var tab3d = document.getElementById('tab-3d');
+      if(!tab3d) return;
+      if(document.getElementById('poppyHeavenPanel')) return; // already there
+      var panel = document.createElement('div');
+      panel.id = 'poppyHeavenPanel';
+      panel.innerHTML = '<div style="font-weight:600;color:#e6e9ff">Heaven GPT</div>'+
+        '<div style="font-size:12px;color:#9fb0ff;margin-top:4px">A lightweight in-app assistant. Toggle "Use API" to connect a GPT endpoint. Otherwise it uses a local helper mode.</div>'+
+        '<textarea id="poppyHeavenInput" placeholder="Ask about tools, controls, or get tips..."></textarea>'+
+        '<div class="poppyHeavenSend"><button class="poppyButton" id="poppyHeavenAsk">Ask</button><button class="poppyButton" id="poppyHeavenToggleApi">Use API: Off</button></div>'+
+        '<div class="poppyHeavenMessages" id="poppyHeavenMessages"></div>';
+      tab3d.appendChild(panel);
+
+      var messages = document.getElementById('poppyHeavenMessages');
+      var input = document.getElementById('poppyHeavenInput');
+      var ask = document.getElementById('poppyHeavenAsk');
+      var toggle = document.getElementById('poppyHeavenToggleApi');
+      var useApi = false;
+
+      function appendMsg(text, cls){ var d=document.createElement('div'); d.className='poppyHeavenMsg'; d.innerText=text; messages.appendChild(d); messages.scrollTop = messages.scrollHeight; }
+
+      toggle.addEventListener('click', function(){
+        useApi = !useApi; toggle.innerText = 'Use API: ' + (useApi? 'On':'Off');
+        appendMsg('Heaven GPT mode: ' + (useApi? 'API (requires window.HEAVEN_API_URL & window.HEAVEN_API_KEY)':'Local helper'), 'system');
+      });
+
+      ask.addEventListener('click', function(){
+        var q = input.value.trim(); if(!q) return;
+        appendMsg('You: ' + q);
+        input.value='';
+        // local heuristic responder (safe, fast)
+        if(!useApi){
+          // simple rule-based answers: detect keywords
+          var lower = q.toLowerCase();
+          if(lower.includes('spawn')||lower.includes('add')||lower.includes('cube')||lower.includes('sphere')){
+            appendMsg('Tip: Use the Add tools in the Tools section to spawn shapes. Click "Add Cube" to create a cube at the scene origin. Use the inspector to change mass and material.');
+            return;
+          }
+          if(lower.includes('sound')||lower.includes('sfx')){
+            appendMsg('Tip: SFX are handled by window.SFX. Adjust SFX volume in Settings → Audio. Use playActionSound("explosion") to trigger explosion SFX programmatically.');
+            return;
+          }
+          if(lower.includes('grid')||lower.includes('ground')){
+            appendMsg('The grid is a visual helper. Toggle Performance Mode in Settings → Visual to reduce detail for smoother FPS on low-end devices.');
+            return;
+          }
+          // fallback canned response
+          appendMsg('Heaven: I\'m a lightweight helper. For advanced grammar/creative help, toggle API mode and provide an API URL/key to connect to a GPT endpoint.');
+          return;
+        } else {
+          // attempt to call external API endpoint if provided in window variables
+          var url = window.HEAVEN_API_URL;
+          var key = window.HEAVEN_API_KEY;
+          if(!url || !key){
+            appendMsg('Error: No API URL or Key found. Set window.HEAVEN_API_URL and window.HEAVEN_API_KEY to enable API mode.');
+            return;
+          }
+          appendMsg('Heaven: contacting API...');
+          // basic fetch (expecting JSON with {answer: "..."}) - user must provide endpoint that accepts this format
+          fetch(url, { method: 'POST', headers: { 'Content-Type':'application/json', 'Authorization': 'Bearer '+key }, body: JSON.stringify({ prompt: q }) })
+            .then(r=>r.json()).then(j=>{ appendMsg('Heaven: ' + (j.answer || JSON.stringify(j).slice(0,300))); })
+            .catch(err=>{ appendMsg('Heaven API error: '+String(err)); });
+        }
+      });
+    }catch(e){ console.warn('Heaven UI error', e); }
+  }
+  // Ensure function runs (idempotent)
+  setTimeout(ensureHeavenUI, 600);
+  document.addEventListener('DOMContentLoaded', ensureHeavenUI);
+})();
+</script>
+
+
+<!-- POPPY: Add infinite gray ground, sky color, splash, audio unlock, and 3D settings integration -->
+<script id="poppy-world-enhance">
+(function(){
+  if(window._poppy_world_enhanced) return; window._poppy_world_enhanced = true;
+  // Ensure audio unlock helper
+  function audioWarmup(){
+    try{
+      if(window.AudioContext || window.webkitAudioContext){
+        var C = window.AudioContext || window.webkitAudioContext;
+        if(!window._poppyAudioCtx) window._poppyAudioCtx = new C();
+        if(window._poppyAudioCtx.state === 'suspended') window._poppyAudioCtx.resume();
+        var src = window._poppyAudioCtx.createBufferSource();
+        src.buffer = window._poppyAudioCtx.createBuffer(1,1,22050);
+        src.connect(window._poppyAudioCtx.destination);
+        try{ src.start(0); }catch(e){};
+      }
+    }catch(e){}
+    // warmup existing audio tags if any
+    var aud = document.querySelectorAll('audio[preload]');
+    aud.forEach(function(a){ try{ a.volume=0.0001; var p=a.play(); if(p && p.catch) p.catch(function(){}); setTimeout(function(){ a.pause(); a.currentTime=0; a.volume=1; },120); }catch(e){} });
+    window._poppyAudioUnlocked = true;
+  }
+
+  // Attach to splash or first gesture
+  var splash = document.getElementById('poppySplash');
+  if(!splash){
+    // create minimal splash to ensure audio unlock and loading
+    var s = document.createElement('div'); s.id='poppySplash';
+    s.style.position='fixed'; s.style.inset='0'; s.style.zIndex=11000; s.style.display='flex'; s.style.alignItems='center'; s.style.justifyContent='center'; s.style.background='radial-gradient(circle at 50% 40%, rgba(40,8,55,0.98), rgba(4,3,8,0.99))'; s.style.flexDirection='column'; s.style.gap='12px';
+    s.innerHTML = '<div id="poppySplashWords" style="color:white;font-weight:800;font-size:46px;letter-spacing:2px;text-align:center">MADE IN HEAVEN</div><div style="color:rgba(230,230,255,0.9);margin-top:6px">imagine</div>';
+    document.body.appendChild(s);
+    splash = s;
+    // basic click hides and warms audio
+    splash.addEventListener('click', function(){ audioWarmup(); setTimeout(function(){ splash.style.display='none'; },600); });
+  } else {
+    splash.addEventListener('click', function(){ audioWarmup(); });
+  }
+
+  // Attempt to integrate infinite gray ground and sky into THREE scene
+  function addGrayWorld(){
+    try{
+      if(typeof THREE === 'undefined' || !window.scene) return false;
+      // set sky/background
+      if(window.scene && (!window._poppy_bg_set)){
+        try{ window.scene.background = new THREE.Color(0x222226); window._poppy_bg_set = true; }catch(e){}
+      }
+      // add large plane as flat gray infinite-seeming ground
+      if(!window._poppyGrayGround){
+        var geom = new THREE.PlaneGeometry(100000,100000,1,1);
+        var mat = new THREE.MeshBasicMaterial({color:0x333336});
+        var plane = new THREE.Mesh(geom, mat);
+        plane.rotation.x = -Math.PI/2;
+        plane.position.y = -0.01; // slight offset
+        plane.receiveShadow = false;
+        plane.renderOrder = 0;
+        plane.frustumCulled = false;
+        window.scene.add(plane);
+        window._poppyGrayGround = plane;
+      } else {
+        window._poppyGrayGround.material.color.set(0x333336);
+      }
+      return true;
+    }catch(e){ console.warn('poppy addGrayWorld', e); return false; }
+  }
+
+  // Move existing in-game UI (editor-sidebar or tools) into 3D tab if present
+  function moveUIInto3DTab(){
+    try{
+      var target = document.getElementById('tab-3d') || document.getElementById('tab-visual');
+      if(!target) return false;
+      var source = document.getElementById('editor-sidebar') || document.querySelector('.editor-sidebar') || document.querySelector('#left-panel') || document.querySelector('.tools') || document.querySelector('[data-tools]');
+      if(!source) return false;
+      // clone and hide original
+      var clone = source.cloneNode(true);
+      clone.id = (source.id||'source-clone') + '-into-3d';
+      clone.style.position='static'; clone.style.width='100%'; clone.style.marginTop='8px';
+      source.style.display = 'none';
+      target.appendChild(clone);
+      // add Info subsection if missing
+      var infoId = 'poppy3dInfo';
+      if(!document.getElementById(infoId)){
+        var info = document.createElement('div'); info.id=infoId; info.style.marginTop='10px'; info.innerHTML = '<div style="font-weight:700;color:#e6e9ff">Info</div><div style="font-size:13px;color:#cbd5ff">This panel contains the in-game tools. Use them to spawn shapes, toggle physics, and adjust materials. Buttons preserved from original UI.</div>';
+        target.appendChild(info);
+      }
+      return true;
+    }catch(e){ console.warn('poppy moveUI', e); return false; }
+  }
+
+  // run after small delay to allow scene init
+  setTimeout(function(){ addGrayWorld(); moveUIInto3DTab(); }, 700);
+
+  // expose helpers
+  window.poppyAddGrayWorld = addGrayWorld;
+  window.poppyMoveUITo3D = moveUIInto3DTab;
+  window.poppyAudioWarmup = audioWarmup;
+})();
+</script>
+
+
+<!-- Shim: map moved 3D UI controls to core functions -->
+<script>
+(function(){
+  function attach() {
+    if (!window.createObject) { setTimeout(attach, 200); return; }
+    // Map basic add buttons inside moved block
+    const mb = document.getElementById('poppy-neon-3d-wrapper');
+    if(!mb) return;
+    const mapBtn = (id, fn) => { const b=mb.querySelector('#'+id); if(b) b.addEventListener('click', fn); };
+    mapBtn('addBox', ()=> window.createObject && window.createObject('Box', window.getNextColor ? window.getNextColor() : 0xffffff, 50));
+    mapBtn('addSphere', ()=> window.createObject && window.createObject('Sphere', window.getNextColor ? window.getNextColor() : 0xffffff, 50));
+    mapBtn('addCylinder', ()=> window.createObject && window.createObject('Cylinder', window.getNextColor ? window.getNextColor() : 0xffffff, 50));
+    mapBtn('addCone', ()=> window.createObject && window.createObject('Cone', window.getNextColor ? window.getNextColor() : 0xffffff, 50));
+    mapBtn('addCapsule', ()=> window.createObject && window.createObject('Capsule', window.getNextColor ? window.getNextColor() : 0xffffff, 50));
+    mapBtn('addTorus', ()=> window.createObject && window.createObject('Torus', window.getNextColor ? window.getNextColor() : 0xffffff, 50));
+    mapBtn('addOctahedron', ()=> window.createObject && window.createObject('Octahedron', window.getNextColor ? window.getNextColor() : 0xffffff, 50));
+    mapBtn('addDetonationCube', ()=> window.createObject && window.createObject('DetonationCube', 0xff4500, 50));
+    // Character controls
+    const spawn = document.getElementById('charSpawnBtn');
+    const enable = document.getElementById('charEnable');
+    const speed = document.getElementById('charSpeed');
+    const jump = document.getElementById('charJump');
+    if(spawn){
+      spawn.addEventListener('click', function(){
+        if(!enable || !enable.checked){ alert('Enable character first'); return; }
+        // spawn placeholder character if possible
+        if(window.POPPY_CHARACTER && window.POPPY_CHARACTER.spawn) { window.POPPY_CHARACTER.spawn(); return; }
+        // basic spawn: use createObject as proxy to spawn a capsule and tag it as character
+        if(window.createObject){
+          window.createObject('Capsule', 0x00ffcc, 70, {x:0,y:5,z:0});
+          alert('Character placeholder spawned. Implement full controller separately.');
+        } else alert('Game engine not ready.');
+      });
+    }
+  }
+  attach();
+})();
+</script>
+
+</body>
+</html>
